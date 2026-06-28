@@ -1,52 +1,52 @@
 sample_date,pathogen,concentration,concentration_units,pct_detectable,rolling_average,location_id,location_name,region,state,fetched_at_utc,type
-,,,,,,,Washington,West,,2026-06-28T10:50:23.668487+00:00,Feature
-,,,,,,,Idaho,West,,2026-06-28T10:50:23.668514+00:00,Feature
-,,,,,,,Montana,West,,2026-06-28T10:50:23.668530+00:00,Feature
-,,,,,,,North Dakota,Midwest,,2026-06-28T10:50:23.668540+00:00,Feature
-,,,,,,,Minnesota,Midwest,,2026-06-28T10:50:23.668548+00:00,Feature
-,,,,,,,Michigan,Midwest,,2026-06-28T10:50:23.668555+00:00,Feature
-,,,,,,,Ohio,Midwest,,2026-06-28T10:50:23.668562+00:00,Feature
-,,,,,,,Pennsylvania,Northeast,,2026-06-28T10:50:23.668569+00:00,Feature
-,,,,,,,New York,Northeast,,2026-06-28T10:50:23.668575+00:00,Feature
-,,,,,,,Vermont,Northeast,,2026-06-28T10:50:23.668582+00:00,Feature
-,,,,,,,New Hampshire,Northeast,,2026-06-28T10:50:23.668589+00:00,Feature
-,,,,,,,Maine,Northeast,,2026-06-28T10:50:23.668595+00:00,Feature
-,,,,,,,Arizona,West,,2026-06-28T10:50:23.668601+00:00,Feature
-,,,,,,,California,West,,2026-06-28T10:50:23.668607+00:00,Feature
-,,,,,,,New Mexico,West,,2026-06-28T10:50:23.668619+00:00,Feature
-,,,,,,,Texas,South,,2026-06-28T10:50:23.668628+00:00,Feature
-,,,,,,,Alaska,West,,2026-06-28T10:50:23.668641+00:00,Feature
-,,,,,,,Louisiana,South,,2026-06-28T10:50:23.668648+00:00,Feature
-,,,,,,,Mississippi,South,,2026-06-28T10:50:23.668656+00:00,Feature
-,,,,,,,Alabama,South,,2026-06-28T10:50:23.668663+00:00,Feature
-,,,,,,,Florida,South,,2026-06-28T10:50:23.668670+00:00,Feature
-,,,,,,,Georgia,South,,2026-06-28T10:50:23.668677+00:00,Feature
-,,,,,,,South Carolina,South,,2026-06-28T10:50:23.668684+00:00,Feature
-,,,,,,,North Carolina,South,,2026-06-28T10:50:23.668691+00:00,Feature
-,,,,,,,Virginia,South,,2026-06-28T10:50:23.668698+00:00,Feature
-,,,,,,,District of Columbia,South,,2026-06-28T10:50:23.668704+00:00,Feature
-,,,,,,,Maryland,South,,2026-06-28T10:50:23.668714+00:00,Feature
-,,,,,,,Delaware,South,,2026-06-28T10:50:23.668720+00:00,Feature
-,,,,,,,New Jersey,Northeast,,2026-06-28T10:50:23.668726+00:00,Feature
-,,,,,,,Connecticut,Northeast,,2026-06-28T10:50:23.668733+00:00,Feature
-,,,,,,,Rhode Island,Northeast,,2026-06-28T10:50:23.668739+00:00,Feature
-,,,,,,,Massachusetts,Northeast,,2026-06-28T10:50:23.668746+00:00,Feature
-,,,,,,,Oregon,West,,2026-06-28T10:50:23.668752+00:00,Feature
-,,,,,,,Hawaii,West,,2026-06-28T10:50:23.668758+00:00,Feature
-,,,,,,,Utah,West,,2026-06-28T10:50:23.668765+00:00,Feature
-,,,,,,,Wyoming,West,,2026-06-28T10:50:23.668771+00:00,Feature
-,,,,,,,Nevada,West,,2026-06-28T10:50:23.668781+00:00,Feature
-,,,,,,,Colorado,West,,2026-06-28T10:50:23.668789+00:00,Feature
-,,,,,,,South Dakota,Midwest,,2026-06-28T10:50:23.668794+00:00,Feature
-,,,,,,,Nebraska,Midwest,,2026-06-28T10:50:23.668798+00:00,Feature
-,,,,,,,Kansas,Midwest,,2026-06-28T10:50:23.668801+00:00,Feature
-,,,,,,,Oklahoma,South,,2026-06-28T10:50:23.668805+00:00,Feature
-,,,,,,,Iowa,Midwest,,2026-06-28T10:50:23.668809+00:00,Feature
-,,,,,,,Missouri,Midwest,,2026-06-28T10:50:23.668813+00:00,Feature
-,,,,,,,Wisconsin,Midwest,,2026-06-28T10:50:23.668817+00:00,Feature
-,,,,,,,Illinois,Midwest,,2026-06-28T10:50:23.668821+00:00,Feature
-,,,,,,,Kentucky,South,,2026-06-28T10:50:23.668835+00:00,Feature
-,,,,,,,Arkansas,South,,2026-06-28T10:50:23.668839+00:00,Feature
-,,,,,,,Tennessee,South,,2026-06-28T10:50:23.668843+00:00,Feature
-,,,,,,,West Virginia,South,,2026-06-28T10:50:23.668846+00:00,Feature
-,,,,,,,Indiana,Midwest,,2026-06-28T10:50:23.668850+00:00,Feature
+,,,,,,,Washington,West,,2026-06-28T11:06:48.841330+00:00,Feature
+,,,,,,,Idaho,West,,2026-06-28T11:06:48.841360+00:00,Feature
+,,,,,,,Montana,West,,2026-06-28T11:06:48.841374+00:00,Feature
+,,,,,,,North Dakota,Midwest,,2026-06-28T11:06:48.841383+00:00,Feature
+,,,,,,,Minnesota,Midwest,,2026-06-28T11:06:48.841390+00:00,Feature
+,,,,,,,Michigan,Midwest,,2026-06-28T11:06:48.841398+00:00,Feature
+,,,,,,,Ohio,Midwest,,2026-06-28T11:06:48.841404+00:00,Feature
+,,,,,,,Pennsylvania,Northeast,,2026-06-28T11:06:48.841410+00:00,Feature
+,,,,,,,New York,Northeast,,2026-06-28T11:06:48.841416+00:00,Feature
+,,,,,,,Vermont,Northeast,,2026-06-28T11:06:48.841423+00:00,Feature
+,,,,,,,New Hampshire,Northeast,,2026-06-28T11:06:48.841429+00:00,Feature
+,,,,,,,Maine,Northeast,,2026-06-28T11:06:48.841435+00:00,Feature
+,,,,,,,Arizona,West,,2026-06-28T11:06:48.841441+00:00,Feature
+,,,,,,,California,West,,2026-06-28T11:06:48.841448+00:00,Feature
+,,,,,,,New Mexico,West,,2026-06-28T11:06:48.841455+00:00,Feature
+,,,,,,,Texas,South,,2026-06-28T11:06:48.841461+00:00,Feature
+,,,,,,,Alaska,West,,2026-06-28T11:06:48.841473+00:00,Feature
+,,,,,,,Louisiana,South,,2026-06-28T11:06:48.841480+00:00,Feature
+,,,,,,,Mississippi,South,,2026-06-28T11:06:48.841487+00:00,Feature
+,,,,,,,Alabama,South,,2026-06-28T11:06:48.841493+00:00,Feature
+,,,,,,,Florida,South,,2026-06-28T11:06:48.841496+00:00,Feature
+,,,,,,,Georgia,South,,2026-06-28T11:06:48.841501+00:00,Feature
+,,,,,,,South Carolina,South,,2026-06-28T11:06:48.841505+00:00,Feature
+,,,,,,,North Carolina,South,,2026-06-28T11:06:48.841509+00:00,Feature
+,,,,,,,Virginia,South,,2026-06-28T11:06:48.841514+00:00,Feature
+,,,,,,,District of Columbia,South,,2026-06-28T11:06:48.841518+00:00,Feature
+,,,,,,,Maryland,South,,2026-06-28T11:06:48.841524+00:00,Feature
+,,,,,,,Delaware,South,,2026-06-28T11:06:48.841529+00:00,Feature
+,,,,,,,New Jersey,Northeast,,2026-06-28T11:06:48.841532+00:00,Feature
+,,,,,,,Connecticut,Northeast,,2026-06-28T11:06:48.841536+00:00,Feature
+,,,,,,,Rhode Island,Northeast,,2026-06-28T11:06:48.841539+00:00,Feature
+,,,,,,,Massachusetts,Northeast,,2026-06-28T11:06:48.841543+00:00,Feature
+,,,,,,,Oregon,West,,2026-06-28T11:06:48.841546+00:00,Feature
+,,,,,,,Hawaii,West,,2026-06-28T11:06:48.841551+00:00,Feature
+,,,,,,,Utah,West,,2026-06-28T11:06:48.841555+00:00,Feature
+,,,,,,,Wyoming,West,,2026-06-28T11:06:48.841558+00:00,Feature
+,,,,,,,Nevada,West,,2026-06-28T11:06:48.841564+00:00,Feature
+,,,,,,,Colorado,West,,2026-06-28T11:06:48.841567+00:00,Feature
+,,,,,,,South Dakota,Midwest,,2026-06-28T11:06:48.841571+00:00,Feature
+,,,,,,,Nebraska,Midwest,,2026-06-28T11:06:48.841574+00:00,Feature
+,,,,,,,Kansas,Midwest,,2026-06-28T11:06:48.841577+00:00,Feature
+,,,,,,,Oklahoma,South,,2026-06-28T11:06:48.841581+00:00,Feature
+,,,,,,,Iowa,Midwest,,2026-06-28T11:06:48.841586+00:00,Feature
+,,,,,,,Missouri,Midwest,,2026-06-28T11:06:48.841590+00:00,Feature
+,,,,,,,Wisconsin,Midwest,,2026-06-28T11:06:48.841594+00:00,Feature
+,,,,,,,Illinois,Midwest,,2026-06-28T11:06:48.841599+00:00,Feature
+,,,,,,,Kentucky,South,,2026-06-28T11:06:48.841605+00:00,Feature
+,,,,,,,Arkansas,South,,2026-06-28T11:06:48.841609+00:00,Feature
+,,,,,,,Tennessee,South,,2026-06-28T11:06:48.841613+00:00,Feature
+,,,,,,,West Virginia,South,,2026-06-28T11:06:48.841617+00:00,Feature
+,,,,,,,Indiana,Midwest,,2026-06-28T11:06:48.841620+00:00,Feature
