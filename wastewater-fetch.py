@@ -43,16 +43,31 @@ session.headers.update({
 
 # ── Embedded-data extraction ───────────────────────────────────────────
 def extract_records_from_json(payload):
-    def _find(obj, depth=0):
-        if depth > 15: return None
+    def _find_all_lists(obj, depth=0):
+        if depth > 15: return []
+        lists = []
         if isinstance(obj, list) and len(obj) > 0 and isinstance(obj[0], dict):
-            return obj
+            lists.append(obj)
         if isinstance(obj, dict):
             for v in obj.values():
-                r = _find(v, depth + 1)
-                if r is not None: return r
+                lists.extend(_find_all_lists(v, depth + 1))
+        return lists
+
+    all_lists = _find_all_lists(payload)
+    if not all_lists:
         return None
-    return _find(payload)
+        
+    # Prioritize lists that look like measurements (have dates and values/pathogens)
+    for lst in all_lists:
+        if not lst: continue
+        sample = lst[0]
+        has_date = any('date' in k.lower() or 'time' in k.lower() for k in sample)
+        has_value = any(v in k.lower() for k in sample for v in ['concentration', 'value', 'result', 'average', 'detect', 'pct', 'pathogen', 'target'])
+        if has_date and has_value:
+            return lst
+            
+    # Fallback to the first list found if no measurement-like list exists
+    return all_lists[0] if all_lists else None
 
 def _extract_next_data(html):
     m = re.search(r'<script\s+id="__NEXT_DATA__"[^>]*>(.*?)</script>', html, re.DOTALL)
@@ -108,7 +123,9 @@ def discover_endpoints(base_url, html):
     fallback_domains = [
         'https://api.wastewaterscan.org/graphql',
         'https://api.wastewaterscan.org/data',
-        'https://api.wastewaterscan.org/v1/measurements'
+        'https://api.wastewaterscan.org/v1/measurements',
+        'https://data.wastewaterscan.org/api/data',
+        'https://data.wastewaterscan.org/api/measurements'
     ]
     for domain in fallback_domains:
         candidates.add(domain)
@@ -121,8 +138,7 @@ def discover_endpoints(base_url, html):
 INTROSPECTION_QUERY = """{ __schema { queryType { fields { name type { name kind ofType { name kind ofType { name kind } } } } } } }"""
 
 def get_graphql_fields(url, type_name, depth=0):
-    """Dynamically query the GraphQL schema to get all fields for a type."""
-    if depth > 1: return ""  # Limit depth to avoid massive nested queries
+    if depth > 1: return ""
     q = """{ __type(name: "%s") { fields { name type { name kind ofType { name kind ofType { name kind } } } } } }""" % type_name
     try:
         r = session.post(url, json={"query": q}, headers={"Content-Type": "application/json"}, timeout=15)
@@ -133,15 +149,11 @@ def get_graphql_fields(url, type_name, depth=0):
                 for f in body["data"]["__type"]["fields"]:
                     fname = f["name"]
                     if fname.startswith("__"): continue
-                    
                     ftype = f["type"]
-                    # Unwrap NonNull and List types
                     while ftype.get("ofType"):
                         ftype = ftype["ofType"]
-                    
                     fkind = ftype.get("kind")
                     ftypename = ftype.get("name")
-                    
                     if fkind == "SCALAR":
                         fields_str.append(fname)
                     elif fkind == "OBJECT" and depth < 1:
@@ -149,8 +161,7 @@ def get_graphql_fields(url, type_name, depth=0):
                         if nested:
                             fields_str.append(f"{fname} {{ {nested} }}")
                 return " ".join(fields_str)
-    except Exception as e:
-        log.info(f"    Error introspecting type {type_name}: {e}")
+    except Exception: pass
     return ""
 
 def try_graphql(url):
@@ -164,7 +175,6 @@ def try_graphql(url):
                 schema_data = body["data"]["__schema"]
                 fields = schema_data.get("queryType", {}).get("fields", [])
                 
-                # Sort fields so that measurement/sample roots are tried FIRST (before sites)
                 def field_priority(f):
                     name = f["name"].lower()
                     if any(k in name for k in ['measurement', 'sample', 'metric', 'timeseries', 'data']): return 0
@@ -174,48 +184,33 @@ def try_graphql(url):
                 for field in fields:
                     name = field["name"]
                     if name.startswith("__"): continue
-                    
-                    # Unwrap the return type to get the core Object type name
                     type_info = field.get("type", {})
                     type_name = type_info.get("name")
                     while type_info.get("ofType"):
                         type_info = type_info["ofType"]
-                        if type_info.get("name"):
-                            type_name = type_info["name"]
-                            
+                        if type_info.get("name"): type_name = type_info["name"]
                     if not type_name: continue
                         
-                    log.info(f"    Found root field '{name}' of type '{type_name}'. Fetching schema dynamically...")
                     query_fields_str = get_graphql_fields(url, type_name)
-                    if not query_fields_str:
-                        log.info(f"    Could not get fields for type {type_name}, skipping.")
-                        continue
+                    if not query_fields_str: continue
                         
-                    # Try common pagination arguments
                     queries = [
                         f"""query {{ {name}(limit: 10000) {{ {query_fields_str} }} }}""",
                         f"""query {{ {name}(first: 10000) {{ {query_fields_str} }} }}""",
                         f"""query {{ {name} {{ {query_fields_str} }} }}""",
                     ]
-                    
                     for q in queries:
                         try:
                             r_data = session.post(url, json={"query": q}, headers={"Content-Type": "application/json"}, timeout=30)
                             if r_data.status_code == 200:
                                 body_data = r_data.json()
-                                if body_data.get("errors"):
-                                    continue  # Likely wrong arguments, try next query
+                                if body_data.get("errors"): continue
                                 if body_data.get("data") and body_data.get("data").get(name):
                                     val = body_data["data"][name]
-                                    if isinstance(val, list) and len(val) > 0:
-                                        log.info(f"    ✓✓✓ FOUND VALID ROOT: '{name}' with {len(val)} records")
+                                    if isinstance(val, (list, dict)):
+                                        log.info(f"    ✓✓✓ FOUND VALID ROOT: '{name}'")
                                         return body_data
-                                    elif isinstance(val, dict):
-                                        log.info(f"    ✓✓✓ FOUND VALID ROOT (Connection): '{name}'")
-                                        return body_data
-                        except Exception:
-                            pass
-                        
+                        except Exception: pass
             elif body.get("errors"):
                 log.info(f"    Introspection disabled: {body['errors'][0].get('message')}")
         else:
@@ -238,7 +233,6 @@ def try_rest(url):
             if 'csv' in ct or (r.text and r.text[:1].isdigit()):
                 log.info("    ✓ REST CSV hit! (GET)")
                 return {"_csv": r.text}
-                
         r_post = session.post(url, json={}, timeout=15)
         if r_post.status_code == 200:
             ct = r_post.headers.get('content-type', '')
@@ -250,12 +244,24 @@ def try_rest(url):
             if 'csv' in ct or (r_post.text and r_post.text[:1].isdigit()):
                 log.info("    ✓ REST CSV hit! (POST)")
                 return {"_csv": r_post.text}
-                
     except Exception as e:
         log.info(f"    ✗ Connection failed: {e}")
     return None
 
 # ── Main Fetch Logic ───────────────────────────────────────────────────
+def is_measurement_data(data):
+    """Check if the extracted data contains actual measurements, not just sites."""
+    records = extract_records(data)
+    if not isinstance(records, list) or not records:
+        return False
+    for r in records[:5]:
+        if not isinstance(r, dict): continue
+        has_date = any('date' in k.lower() or 'time' in k.lower() for k in r)
+        has_value = any(v in k.lower() for k in r for v in ['concentration', 'value', 'result', 'average', 'detect', 'pct', 'pathogen', 'target'])
+        if has_date and has_value:
+            return True
+    return False
+
 def fetch_data():
     if KNOWN_API_URL:
         log.info(f"Using WWS_API_URL = {KNOWN_API_URL}")
@@ -275,10 +281,9 @@ def fetch_data():
 
     next_data = _extract_next_data(html)
     if next_data:
-        records = extract_records_from_json(next_data)
-        if records:
-            log.info(f"✓ Extracted {len(records)} records from __NEXT_DATA__")
-            return records
+        if is_measurement_data(next_data):
+            log.info(f"✓ Extracted measurement records from __NEXT_DATA__")
+            return next_data
 
     scripts = re.findall(r'<script[^>]*>(.*?)</script>', html, re.DOTALL)
     for script_text in scripts:
@@ -286,21 +291,31 @@ def fetch_data():
         if not (s.startswith('{') or s.startswith('[')): continue
         try:
             payload = json.loads(s)
-            records = extract_records_from_json(payload)
-            if records:
-                log.info(f"✓ Extracted {len(records)} records from embedded HTML JSON")
-                return records
+            if is_measurement_data(payload):
+                log.info(f"✓ Extracted measurement records from embedded HTML JSON")
+                return payload
         except json.JSONDecodeError: pass
 
-    log.info("  No embedded data found. Discovering API endpoints from JS bundles...")
+    log.info("  No embedded measurement data found. Discovering API endpoints from JS bundles...")
     endpoints = discover_endpoints(base, html)
     log.info(f"  {len(endpoints)} candidate endpoint(s) to try:")
     for url in endpoints: log.info(f"    • {url}")
 
+    best_data = None
     for url in endpoints:
         data = try_graphql(url) if 'graphql' in url.lower() else try_rest(url)
-        if data: return data
+        if data:
+            if is_measurement_data(data):
+                log.info("✓ Found valid measurement data!")
+                return data
+            else:
+                if best_data is None: best_data = data
+                log.info("  ✗ Data found, but missing measurement fields (sample_date, pathogen). Continuing search...")
 
+    if best_data:
+        log.warning("⚠️ Could not find a measurements endpoint. Returning sites/locations data instead.")
+        return best_data
+        
     raise RuntimeError(
         "No endpoint returned data. Check logs above. "
         "You may need to manually inspect the network tab on data.wastewaterscan.org "
@@ -314,15 +329,13 @@ def extract_records(payload):
     if isinstance(payload, list): return payload
         
     data = payload.get('data', payload) if isinstance(payload, dict) else payload
-    for key in ['measurements', 'results', 'data', 'items', 'records', 'sites', 'samples', 'samplingEvents', 'pathogens', 'metrics', 'timeseries', 'sitesData', 'allMeasurements', 'allSites', 'getMeasurements']:
+    for key in ['measurements', 'results', 'data', 'items', 'records', 'samples', 'samplingEvents', 'pathogens', 'metrics', 'timeseries', 'sitesData', 'allMeasurements', 'allSites', 'getMeasurements', 'sites']:
         if isinstance(data, dict) and key in data:
             val = data[key]
-            # Handle direct array returns
             if isinstance(val, list):
                 if val and isinstance(val[0], dict) and 'node' in val[0]:
                     return [e['node'] for e in val]
                 return val
-            # Handle Relay-style connection objects { edges: [ { node: ... } ] }
             elif isinstance(val, dict) and 'edges' in val and isinstance(val['edges'], list):
                 edges = val['edges']
                 if edges and isinstance(edges[0], dict) and 'node' in edges[0]:
@@ -346,22 +359,25 @@ def to_df(records):
             'concentration_units': record.get('concentrationUnits') or record.get('units') or record.get('unit'),
             'pct_detectable':      record.get('pctDetect') or record.get('pct_detectable') or record.get('percentDetectable') or record.get('pctDetectable'),
             'rolling_average':     record.get('rollingAverage') or record.get('rolling_average') or record.get('rollingAvg'),
-            'location_id':         loc.get('id') or loc.get('siteId') or loc.get('site_id'),
-            'location_name':       loc.get('name') or loc.get('siteName') or loc.get('site_name'),
-            'region':              loc.get('region'),
-            'state':               loc.get('state'),
+            'location_id':         loc.get('id') or loc.get('siteId') or loc.get('site_id') or record.get('location_id'),
+            'location_name':       loc.get('name') or loc.get('siteName') or loc.get('site_name') or record.get('location_name'),
+            'region':              loc.get('region') or record.get('region'),
+            'state':               loc.get('state') or record.get('state'),
             'fetched_at_utc':      datetime.now(timezone.utc).isoformat(),
         }
         
         # Dynamically capture ALL other fields so we don't lose missing data
         for k, v in record.items():
-            if k not in flat and k not in ['location', 'site', 'properties', 'siteBySiteId']:
-                if isinstance(v, (str, int, float, bool)):
+            if k in ['location', 'site', 'properties', 'siteBySiteId']: continue
+            if isinstance(v, (str, int, float, bool)):
+                if k not in flat or flat[k] is None:
                     flat[k] = v
-                elif isinstance(v, dict):
-                    for nk, nv in v.items():
-                        if isinstance(nv, (str, int, float, bool)):
-                            flat[f"{k}_{nk}"] = nv
+            elif isinstance(v, dict):
+                for nk, nv in v.items():
+                    if isinstance(nv, (str, int, float, bool)):
+                        flat_key = f"{k}_{nk}"
+                        if flat_key not in flat or flat[flat_key] is None:
+                            flat[flat_key] = nv
                             
         flat_list.append(flat)
         
