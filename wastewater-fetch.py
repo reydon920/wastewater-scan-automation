@@ -295,22 +295,29 @@ def pick_third_latest(records):
     log.info(f"  Third-to-latest date found: {rec.get('sampleDate') or rec.get('date', '?')}")
     return rec
 
-def to_df(record):
-    loc = record.get('location') or record.get('site') or record.get('properties') or record.get('siteBySiteId') or {}
-    flat = {
-        'sample_date':         record.get('sampleDate') or record.get('sample_date') or record.get('date') or record.get('sampledAt') or record.get('collectedAt'),
-        'pathogen':            record.get('pathogen') or record.get('target') or record.get('pathogenName'),
-        'concentration':       record.get('concentration') or record.get('value') or record.get('concentrationValue') or record.get('result'),
-        'concentration_units': record.get('concentrationUnits') or record.get('units') or record.get('unit'),
-        'pct_detectable':      record.get('pctDetect') or record.get('pct_detectable') or record.get('percentDetectable') or record.get('pctDetectable'),
-        'rolling_average':     record.get('rollingAverage') or record.get('rolling_average') or record.get('rollingAvg'),
-        'location_id':         loc.get('id') or loc.get('siteId') or loc.get('site_id'),
-        'location_name':       loc.get('name') or loc.get('siteName') or loc.get('site_name'),
-        'region':              loc.get('region'),
-        'state':               loc.get('state'),
-        'fetched_at_utc':      datetime.now(timezone.utc).isoformat(),
-    }
-    df = pd.DataFrame([flat])
+def to_df(records):
+    if not isinstance(records, list):
+        records = [records]
+        
+    flat_list = []
+    for record in records:
+        loc = record.get('location') or record.get('site') or record.get('properties') or record.get('siteBySiteId') or {}
+        flat = {
+            'sample_date':         record.get('sampleDate') or record.get('sample_date') or record.get('date') or record.get('sampledAt') or record.get('collectedAt'),
+            'pathogen':            record.get('pathogen') or record.get('target') or record.get('pathogenName'),
+            'concentration':       record.get('concentration') or record.get('value') or record.get('concentrationValue') or record.get('result'),
+            'concentration_units': record.get('concentrationUnits') or record.get('units') or record.get('unit'),
+            'pct_detectable':      record.get('pctDetect') or record.get('pct_detectable') or record.get('percentDetectable') or record.get('pctDetectable'),
+            'rolling_average':     record.get('rollingAverage') or record.get('rolling_average') or record.get('rollingAvg'),
+            'location_id':         loc.get('id') or loc.get('siteId') or loc.get('site_id'),
+            'location_name':       loc.get('name') or loc.get('siteName') or loc.get('site_name'),
+            'region':              loc.get('region'),
+            'state':               loc.get('state'),
+            'fetched_at_utc':      datetime.now(timezone.utc).isoformat(),
+        }
+        flat_list.append(flat)
+        
+    df = pd.DataFrame(flat_list)
     df['sample_date'] = pd.to_datetime(df['sample_date'], errors='coerce')
     return df
 
@@ -335,7 +342,9 @@ def maybe_email(path):
 if __name__ == "__main__":
     payload = fetch_data()
     records = extract_records(payload)
-    record  = pick_third_latest(records)
-    df      = to_df(record)
+    
+    # Removed: record = pick_third_latest(records)
+    
+    df      = to_df(records)  # Now processes ALL records
     save_csv(df, CSV_PATH)
     maybe_email(CSV_PATH)
