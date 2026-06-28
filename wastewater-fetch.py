@@ -2,9 +2,8 @@
 """
 WastewaterScan Data Exporter - Dynamic Discovery & Measurement Extraction
 
-- Dynamically discovers the GraphQL/REST API endpoint (no hardcoded domains).
-- Specifically targets the 'measurements' query with proper filter arguments.
-- Falls back to per-site batching if bulk query is rejected.
+- Dynamically discovers the GraphQL/REST API endpoint.
+- Uses hardcoded Hasura-style queries if introspection is disabled.
 - Decomposes timestamps into separate year/month/day/hour/minute/second columns.
 - Strips GeoJSON cruft (geometry, type=Feature, coordinates).
 """
@@ -320,8 +319,51 @@ def try_graphql(url):
                         if isinstance(val, list) and val:
                             log.info(f"      ✓✓✓ Got {len(val)} measurements (no args)")
                             return body_data["data"]
+                            
             elif body.get("errors"):
                 log.info(f"    Introspection disabled: {body['errors'][0].get('message')}")
+                log.info("    Trying hardcoded Hasura-style measurements queries...")
+                
+                # FALLBACK: Hardcoded queries when introspection is disabled
+                queries = [
+                    """
+                    query {
+                      measurements(limit: 100000) {
+                        date
+                        pathogen
+                        concentration
+                        concentrationUnits
+                        pctDetectable
+                        rollingAverage
+                        siteId
+                        site { id name state region }
+                      }
+                    }
+                    """,
+                    """
+                    query {
+                      measurements(limit: 100000) {
+                        sample_date
+                        pathogen
+                        concentration
+                        concentration_units
+                        pct_detectable
+                        rolling_average
+                        site_id
+                        site { id name state region }
+                      }
+                    }
+                    """
+                ]
+                for q in queries:
+                    r_meas = session.post(url, json={"query": q}, timeout=30)
+                    if r_meas.status_code == 200:
+                        body_meas = r_meas.json()
+                        if not body_meas.get("errors") and body_meas.get("data", {}).get("measurements"):
+                            val = body_meas["data"]["measurements"]
+                            if isinstance(val, list) and val:
+                                log.info(f"    ✓✓✓ FOUND MEASUREMENTS (hardcoded)! Got {len(val)} records.")
+                                return body_meas["data"]
         else:
             log.info(f"    ✗ HTTP {r.status_code}")
     except Exception as e:
