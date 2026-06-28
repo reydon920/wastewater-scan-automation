@@ -158,7 +158,7 @@ def try_graphql(url):
                                     if val:
                                         log.info(f"    ✓✓✓ FOUND VALID ROOT: '{name}'")
                                         # Fetch deep data dynamically
-                                        deep_q = f"""query {{ {name}(limit: 100) {{ sampleDate sample_date date pathogen target concentration value location {{ name state }} site {{ name state }} }} }}"""
+                                        deep_q = f"""query {{ {name}(limit: 10000) {{ sampleDate sample_date date pathogen target concentration value location {{ name state }} site {{ name state }} }} }}"""
                                         r3 = session.post(url, json={"query": deep_q}, headers={"Content-Type": "application/json"}, timeout=20)
                                         if r3.status_code == 200:
                                             body3 = r3.json()
