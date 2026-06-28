@@ -2,11 +2,10 @@
 """
 WastewaterScan Data Exporter
 =============================
-Dynamically discovers the API endpoint used by data.wastewaterscan.org,
-fetches infectious-disease measurements, extracts the third-to-latest
-record, and saves as CSV.
-
-If WWS_API_URL is set, that URL is used directly (bypassing discovery).
+Intelligently fetches infectious-disease measurements from data.wastewaterscan.org.
+It first checks for data embedded directly in the page HTML (Next.js __NEXT_DATA__ 
+or GeoJSON). If none is found, it inspects JavaScript bundles to discover the API. 
+It then extracts the third-to-latest record and saves it as a CSV.
 """
 
 import os
@@ -42,127 +41,80 @@ log = logging.getLogger("wws")
 
 session = requests.Session()
 session.headers.update({
-    "User-Agent": "Mozilla/5.0 (compatible; wws-export/1.0)",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "Accept": "text/html,application/json,text/csv,*/*",
 })
 
 
+# ── Embedded Data Extraction ───────────────────────────────────────────
+def extract_records_from_json(payload):
+    """Recursively search a JSON object for lists of data records."""
+    def _find(obj, d=0):
+        if d > 8:
+            return None
+        if isinstance(obj, list):
+            if len(obj) > 0 and isinstance(obj[0], dict):
+                keys = set()
+                for item in obj[:5]:
+                    if isinstance(item, dict):
+                        keys.update(item.keys())
+                
+                # Look for Wastewaterscan specific keys
+                if any(k in keys for k in ('sampleDate', 'sample_date', 'pathogen', 'pctDetect', 'concentration')):
+                    return obj
+                
+                # Look for GeoJSON features (common in mapping dashboards)
+                if obj[0].get("type") == "Feature" and "properties" in obj[0]:
+                    features = []
+                    for f in obj:
+                        props = f.get("properties", {})
+                        if isinstance(props, dict):
+                            features.append(props)
+                    if features:
+                        fkeys = set()
+                        for f in features[:5]: 
+                            fkeys.update(f.keys())
+                        if any(k in fkeys for k in ('sampleDate', 'sample_date', 'pathogen', 'pctDetect', 'concentration')):
+                            return features
+                            
+        if isinstance(obj, dict):
+            for v in obj.values():
+                r = _find(v, d + 1)
+                if r:
+                    return r
+        return None
+
+    return _find(payload)
+
+
 # ── Endpoint Discovery ─────────────────────────────────────────────────
-def discover_endpoints():
-    """
-    Fetch the main page, inspect its JS bundles, and return a ranked
-    set of candidate API endpoint URLs.
-    """
-    log.info(f"→ Fetching {BASE_URL}")
-    resp = session.get(BASE_URL, timeout=30, allow_redirects=True)
-    resp.raise_for_status()
-    base, html = resp.url, resp.text
-    log.info(f"  Final URL: {base}  ({len(html):,} bytes)")
-
-    candidates = set()
-
-    # 1 · __NEXT_DATA__ (Next.js embeds JSON in a script tag)
-    nd = re.search(
-        r'<script[^>]*id="__NEXT_DATA__"[^>]*>(.*?)</script>', html, re.DOTALL
-    )
-    if nd:
-        try:
-            data = json.loads(nd.group(1))
-            for url in re.findall(r'https?://[^\s"\'\\]+', json.dumps(data)):
-                if any(k in url.lower() for k in ('api', 'graphql', 'data')):
-                    candidates.add(url.split('\\')[0])
-            log.info(f"  __NEXT_DATA__: {len(candidates)} URL(s) so far")
-        except json.JSONDecodeError:
-            pass
-
-    # 2 · Inline scripts (may contain fetch / API calls directly)
-    for script in re.findall(r'<script[^>]*>(.*?)</script>', html, re.DOTALL):
-        _harvest_urls(script, base, candidates)
-
-    # 3 · External JS bundles
-    scripts = re.findall(r'<script[^>]+src="([^"]+)"', html)
-    log.info(f"  {len(scripts)} external script(s) found")
-    for src in scripts[:20]:                       # cap at 20 bundles
-        if not src.endswith('.js'):
-            continue
-        url = urljoin(base, src)
-        try:
-            r = session.get(url, timeout=20)
-            if r.status_code == 200:
-                _harvest_urls(r.text, base, candidates)
-        except requests.RequestException:
-            pass
-
-    # 4 · Static fallbacks
-    for path in ['/graphql', '/api/graphql', '/api/data',
-                 '/api/measurements', '/api/v1/data',
-                 '/api/v1/measurements', '/data.csv',
-                 '/api/data.csv']:
-        candidates.add(urljoin(base, path))
-    candidates.add("https://api.wastewaterscan.org/graphql")
-    candidates.add("https://api.wastewaterscan.org/data")
-
-    # Deduplicate & sort (GraphQL endpoints first)
-    gql = sorted(c for c in candidates if 'graphql' in c.lower())
-    rest = sorted(c for c in candidates if c not in gql)
-    ordered = gql + rest
-
-    log.info(f"  {len(ordered)} candidate endpoint(s):")
-    for c in ordered:
-        log.info(f"    • {c}")
-    return ordered
-
-
 def _harvest_urls(text, base, out):
     """Extract API-looking URLs from a chunk of JS."""
-    # Absolute GraphQL / API URLs
     out.update(re.findall(r'["\'`](https?://[^"\'`]*graphql[^"\'`]*)["\'`]', text))
     out.update(re.findall(r'["\'`](https?://[^"\'`]*/api/[^"\'`]*)["\'`]', text))
-    # Relative API / graphql paths
     for p in re.findall(r'["\'`](/(?:api|graphql)/[^"\'`]*)["\'`]', text):
         out.add(urljoin(base, p))
-    # fetch("...") calls
     for p in re.findall(r'fetch\s*\(\s*["\'`]([^"\'`]+)["\'`]', text):
         out.add(p if p.startswith('http') else urljoin(base, p))
-    # Apollo / urql uri: "..."
     out.update(re.findall(r'uri\s*:\s*["\'`](https?://[^"\'`]+)["\'`]', text))
-    # axios.get("...") / axios.post("...")
-    for p in re.findall(r'axios\.\w+\s*\(\s*["\'`]([^"\'`]+)["\'`]', text):
-        out.add(p if p.startswith('http') else urljoin(base, p))
 
-
-# ── Data Fetching ──────────────────────────────────────────────────────
-GQL_QUERY = """
-query {
-  measurements(limit: 100, orderBy: { sampleDate: DESC }) {
-    sampleDate
-    location { id name region state }
-    pathogen
-    concentration
-    concentrationUnits
-    pctDetect
-    rollingAverage
-  }
-}
-"""
 
 def try_graphql(url):
+    query = """
+    query {
+      measurements(limit: 100, orderBy: { sampleDate: DESC }) {
+        sampleDate location { id name region state }
+        pathogen concentration concentrationUnits pctDetect rollingAverage
+      }
+    }
+    """
     try:
-        r = session.post(
-            url, json={"query": GQL_QUERY},
-            headers={"Content-Type": "application/json"}, timeout=15,
-        )
-        if r.status_code == 200:
-            body = r.json()
-            if "data" in body:
-                log.info(f"  ✓ GraphQL OK: {url}")
-                return body
-            if "errors" in body:
-                log.info(f"  · GraphQL errors at {url}: {str(body['errors'])[:120]}")
-        else:
-            log.info(f"  · {r.status_code} at {url}")
-    except Exception as e:
-        log.info(f"  · Error at {url}: {e}")
+        r = session.post(url, json={"query": query}, headers={"Content-Type": "application/json"}, timeout=15)
+        if r.status_code == 200 and "data" in r.json():
+            log.info(f"  ✓ GraphQL OK: {url}")
+            return r.json()
+    except Exception:
+        pass
     return None
 
 
@@ -177,77 +129,91 @@ def try_rest(url):
             if 'csv' in ct or (r.text and r.text[:1].isdigit()):
                 log.info(f"  ✓ REST CSV: {url}")
                 return {"_csv": r.text}
-        else:
-            log.info(f"  · {r.status_code} at {url}")
-    except Exception as e:
-        log.info(f"  · Error at {url}: {e}")
+    except Exception:
+        pass
     return None
 
 
+# ── Main Fetch Logic ───────────────────────────────────────────────────
 def fetch_data():
-    """Try known URL, then discover, then try each candidate."""
-    # Manual override
     if KNOWN_API_URL:
         log.info(f"Using WWS_API_URL = {KNOWN_API_URL}")
-        data = (try_graphql(KNOWN_API_URL) if 'graphql' in KNOWN_API_URL.lower()
-                else try_rest(KNOWN_API_URL))
-        if data:
-            return data
+        data = try_graphql(KNOWN_API_URL) if 'graphql' in KNOWN_API_URL.lower() else try_rest(KNOWN_API_URL)
+        if data: return data
         raise RuntimeError(f"Configured WWS_API_URL failed: {KNOWN_API_URL}")
 
-    # Discovery
-    candidates = discover_endpoints()
-    for url in candidates:
+    log.info(f"→ Fetching {BASE_URL}")
+    resp = session.get(BASE_URL, timeout=30, allow_redirects=True)
+    resp.raise_for_status()
+    base, html = resp.url, resp.text
+
+    # 1. Try to find data directly embedded in the HTML
+    scripts = re.findall(r'<script[^>]*>(.*?)</script>', html, re.DOTALL)
+    for script_text in scripts:
+        if not script_text.strip().startswith('{') and not script_text.strip().startswith('['):
+            continue
+        try:
+            payload = json.loads(script_text)
+            records = extract_records_from_json(payload)
+            if records:
+                log.info(f"✓ Extracted {len(records)} records directly from embedded HTML JSON!")
+                return records
+        except json.JSONDecodeError:
+            pass
+
+    # 2. Fallback: Discover API endpoints from JS bundles
+    log.info("  No embedded data found. Discovering API endpoints from JS bundles...")
+    candidates = set()
+    _harvest_urls(html, base, candidates)
+    
+    ext_scripts = re.findall(r'<script[^>]+src="([^"]+)"', html)
+    for src in ext_scripts[:15]:
+        if not src.endswith('.js'): continue
+        url = urljoin(base, src)
+        try:
+            r = session.get(url, timeout=20)
+            if r.status_code == 200:
+                _harvest_urls(r.text, base, candidates)
+        except requests.RequestException:
+            pass
+
+    # Static educated guesses
+    for path in ['/graphql', '/api/graphql', '/api/data', '/api/measurements']:
+        candidates.add(urljoin(base, path))
+
+    gql = sorted(c for c in candidates if 'graphql' in c.lower())
+    rest = sorted(c for c in candidates if c not in gql)
+    ordered = gql + rest
+
+    log.info(f"  {len(ordered)} candidate endpoint(s) found:")
+    for c in ordered: log.info(f"    • {c}")
+
+    for url in ordered:
         data = try_graphql(url) if 'graphql' in url.lower() else try_rest(url)
-        if data:
-            return data
+        if data: return data
 
     raise RuntimeError(
         "No endpoint returned data. Open data.wastewaterscan.org in a browser, "
         "use DevTools → Network → filter 'graphql' or 'api', find the real "
-        "endpoint URL, then set the WWS_API_URL env var."
+        "endpoint URL, then set the WWS_API_URL env var in GitHub Actions."
     )
 
 
 # ── Processing ─────────────────────────────────────────────────────────
 def extract_records(payload):
-    """Normalise various response shapes into a list of dict records."""
-    # CSV shortcut
     if isinstance(payload, dict) and '_csv' in payload:
         return pd.read_csv(StringIO(payload['_csv'])).to_dict('records')
-
+    if isinstance(payload, list):
+        return payload
+        
     data = payload.get('data', payload) if isinstance(payload, dict) else payload
-
-    # Known keys
     for key in ('measurements', 'results', 'data', 'items', 'records', 'sites'):
         if isinstance(data, dict) and key in data and isinstance(data[key], list):
             recs = data[key]
             if recs and isinstance(recs[0], dict) and 'node' in recs[0]:
-                recs = [e['node'] for e in recs]     # Relay edges
+                recs = [e['node'] for e in recs]
             return recs
-
-    # Already a list
-    if isinstance(data, list):
-        return data
-
-    # Recursive search (max depth 5)
-    def _find(obj, d=0):
-        if d > 5:
-            return None
-        if isinstance(obj, list) and obj and isinstance(obj[0], dict):
-            return obj
-        if isinstance(obj, dict):
-            for v in obj.values():
-                r = _find(v, d + 1)
-                if r:
-                    return r
-        return None
-
-    found = _find(data)
-    if found:
-        return found
-    raise ValueError(f"Cannot extract records from payload (keys: "
-                     f"{list(payload.keys()) if isinstance(payload, dict) else type(payload)})")
+    return data
 
 
 def pick_third_latest(records):
@@ -261,12 +227,12 @@ def pick_third_latest(records):
         return ''
 
     rec = sorted(records, key=sort_key, reverse=True)[2]
-    log.info(f"  Third-to-latest: {rec.get('sampleDate') or rec.get('date', '?')}")
+    log.info(f"  Third-to-latest date found: {rec.get('sampleDate') or rec.get('date', '?')}")
     return rec
 
 
 def to_df(record):
-    loc = record.get('location') or record.get('site') or {}
+    loc = record.get('location') or record.get('site') or record.get('properties') or {}
     flat = {
         'sample_date':         record.get('sampleDate') or record.get('sample_date') or record.get('date'),
         'pathogen':            record.get('pathogen') or record.get('target') or record.get('pathogenName'),
@@ -293,17 +259,13 @@ def save_csv(df, path):
 
 
 def maybe_email(path):
-    if not EMAIL_ENABLED:
-        return
+    if not EMAIL_ENABLED: return
     msg = EmailMessage()
     msg["Subject"] = f"WastewaterScan export — {os.path.basename(path)}"
     msg["From"], msg["To"] = SMTP_USER, EMAIL_TO
     msg.set_content("Weekly wastewater data export attached.")
     with open(path, "rb") as f:
-        msg.add_attachment(
-            f.read(), maintype="text", subtype="csv",
-            filename=os.path.basename(path),
-        )
+        msg.add_attachment(f.read(), maintype="text", subtype="csv", filename=os.path.basename(path))
     with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT) as s:
         s.login(SMTP_USER, SMTP_PASS)
         s.send_message(msg)
@@ -311,15 +273,10 @@ def maybe_email(path):
 
 
 # ── Main ───────────────────────────────────────────────────────────────
-def main():
+if __name__ == "__main__":
     payload = fetch_data()
     records = extract_records(payload)
-    log.info(f"Extracted {len(records)} record(s)")
     record  = pick_third_latest(records)
     df      = to_df(record)
     save_csv(df, CSV_PATH)
     maybe_email(CSV_PATH)
-
-
-if __name__ == "__main__":
-    main()
