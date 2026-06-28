@@ -43,31 +43,16 @@ session.headers.update({
 
 # ── Embedded-data extraction ───────────────────────────────────────────
 def extract_records_from_json(payload):
-    def _find_all_lists(obj, depth=0):
-        if depth > 15: return []
-        lists = []
+    def _find(obj, depth=0):
+        if depth > 15: return None
         if isinstance(obj, list) and len(obj) > 0 and isinstance(obj[0], dict):
-            lists.append(obj)
+            return obj
         if isinstance(obj, dict):
             for v in obj.values():
-                lists.extend(_find_all_lists(v, depth + 1))
-        return lists
-
-    all_lists = _find_all_lists(payload)
-    if not all_lists:
+                r = _find(v, depth + 1)
+                if r is not None: return r
         return None
-        
-    # Prioritize lists that look like measurements (have dates and values/pathogens)
-    for lst in all_lists:
-        if not lst: continue
-        sample = lst[0]
-        has_date = any('date' in k.lower() or 'time' in k.lower() for k in sample)
-        has_value = any(v in k.lower() for k in sample for v in ['concentration', 'value', 'result', 'average', 'detect', 'pct', 'pathogen', 'target'])
-        if has_date and has_value:
-            return lst
-            
-    # Fallback to the first list found if no measurement-like list exists
-    return all_lists[0] if all_lists else None
+    return _find(payload)
 
 def _extract_next_data(html):
     m = re.search(r'<script\s+id="__NEXT_DATA__"[^>]*>(.*?)</script>', html, re.DOTALL)
@@ -149,11 +134,17 @@ def get_graphql_fields(url, type_name, depth=0):
                 for f in body["data"]["__type"]["fields"]:
                     fname = f["name"]
                     if fname.startswith("__"): continue
+                    
+                    # Block geographic fields that break CSVs and cause clumped data
+                    if fname.lower() in ['geometry', 'geography', 'coordinates', 'geojson', 'geom', 'the_geom', 'wkb_geometry', 'bounds']:
+                        continue
+                        
                     ftype = f["type"]
                     while ftype.get("ofType"):
                         ftype = ftype["ofType"]
                     fkind = ftype.get("kind")
                     ftypename = ftype.get("name")
+                    
                     if fkind == "SCALAR":
                         fields_str.append(fname)
                     elif fkind == "OBJECT" and depth < 1:
@@ -250,7 +241,6 @@ def try_rest(url):
 
 # ── Main Fetch Logic ───────────────────────────────────────────────────
 def is_measurement_data(data):
-    """Check if the extracted data contains actual measurements, not just sites."""
     records = extract_records(data)
     if not isinstance(records, list) or not records:
         return False
@@ -310,7 +300,7 @@ def fetch_data():
                 return data
             else:
                 if best_data is None: best_data = data
-                log.info("  ✗ Data found, but missing measurement fields (sample_date, pathogen). Continuing search...")
+                log.info("  ✗ Data found, but missing measurement fields. Continuing search...")
 
     if best_data:
         log.warning("⚠️ Could not find a measurements endpoint. Returning sites/locations data instead.")
@@ -329,6 +319,43 @@ def extract_records(payload):
     if isinstance(payload, list): return payload
         
     data = payload.get('data', payload) if isinstance(payload, dict) else payload
+    
+    # Deep search for a list that looks like measurements, unnesting if necessary
+    def _find_all_measurements(obj, depth=0, parent_data=None):
+        if depth > 10: return []
+        
+        found_measurements = []
+        
+        if isinstance(obj, list) and len(obj) > 0 and isinstance(obj[0], dict):
+            sample = obj[0]
+            has_date = any('date' in k.lower() or 'time' in k.lower() for k in sample)
+            has_value = any(v in k.lower() for k in sample for v in ['concentration', 'value', 'result', 'average', 'detect', 'pct', 'pathogen', 'target'])
+            if has_date and has_value:
+                # Enrich with parent data (e.g., attach site name to measurement)
+                if parent_data:
+                    for item in obj:
+                        for pk, pv in parent_data.items():
+                            if isinstance(pv, (str, int, float, bool)):
+                                item.setdefault(f"site_{pk}", pv)
+                return obj
+                
+        if isinstance(obj, dict):
+            current_parent = {k: v for k, v in obj.items() if isinstance(v, (str, int, float, bool))}
+            if parent_data:
+                current_parent = {**parent_data, **current_parent}
+                
+            for v in obj.values():
+                res = _find_all_measurements(v, depth + 1, current_parent)
+                if res:
+                    found_measurements.extend(res)
+                    
+        return found_measurements
+
+    measurements = _find_all_measurements(data)
+    if measurements:
+        return measurements
+
+    # Fallback to original extraction if no measurement-like list is found
     for key in ['measurements', 'results', 'data', 'items', 'records', 'samples', 'samplingEvents', 'pathogens', 'metrics', 'timeseries', 'sitesData', 'allMeasurements', 'allSites', 'getMeasurements', 'sites']:
         if isinstance(data, dict) and key in data:
             val = data[key]
@@ -350,6 +377,8 @@ def to_df(records):
         records = [records]
         
     flat_list = []
+    ignore_keys = ['location', 'site', 'properties', 'siteBySiteId', 'geometry', 'coordinates', 'geography', 'geom', 'the_geom', 'wkb_geometry', 'bounds']
+    
     for record in records:
         loc = record.get('location') or record.get('site') or record.get('properties') or record.get('siteBySiteId') or {}
         flat = {
@@ -359,21 +388,22 @@ def to_df(records):
             'concentration_units': record.get('concentrationUnits') or record.get('units') or record.get('unit'),
             'pct_detectable':      record.get('pctDetect') or record.get('pct_detectable') or record.get('percentDetectable') or record.get('pctDetectable'),
             'rolling_average':     record.get('rollingAverage') or record.get('rolling_average') or record.get('rollingAvg'),
-            'location_id':         loc.get('id') or loc.get('siteId') or loc.get('site_id') or record.get('location_id'),
-            'location_name':       loc.get('name') or loc.get('siteName') or loc.get('site_name') or record.get('location_name'),
-            'region':              loc.get('region') or record.get('region'),
-            'state':               loc.get('state') or record.get('state'),
+            'location_id':         loc.get('id') or loc.get('siteId') or loc.get('site_id') or record.get('location_id') or record.get('site_id'),
+            'location_name':       loc.get('name') or loc.get('siteName') or loc.get('site_name') or record.get('location_name') or record.get('site_name'),
+            'region':              loc.get('region') or record.get('region') or record.get('site_region'),
+            'state':               loc.get('state') or record.get('state') or record.get('site_state'),
             'fetched_at_utc':      datetime.now(timezone.utc).isoformat(),
         }
         
         # Dynamically capture ALL other fields so we don't lose missing data
         for k, v in record.items():
-            if k in ['location', 'site', 'properties', 'siteBySiteId']: continue
+            if k in ignore_keys: continue
             if isinstance(v, (str, int, float, bool)):
                 if k not in flat or flat[k] is None:
                     flat[k] = v
             elif isinstance(v, dict):
                 for nk, nv in v.items():
+                    if nk in ignore_keys: continue
                     if isinstance(nv, (str, int, float, bool)):
                         flat_key = f"{k}_{nk}"
                         if flat_key not in flat or flat[flat_key] is None:
