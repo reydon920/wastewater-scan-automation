@@ -23,11 +23,8 @@ jobs:
 
       - name: Run exporter
         env:
-          # ── Point directly at the GraphQL API (no auto-discovery needed) ──
-          WWS_API_URL:        'https://api.wastewaterscan.org/graphql'
+          # Leave blank to let the script auto-discover the API endpoint dynamically
           WWS_LOOKBACK_DAYS:  '14'
-          # Set to '1' to keep only the third-to-latest sample date
-          WWS_THIRD_LATEST:   '0'
           WWS_EMAIL:          ${{ vars.WWS_EMAIL }}
           WWS_SMTP_USER:      ${{ secrets.SMTP_USER }}
           WWS_SMTP_PASS:      ${{ secrets.SMTP_PASS }}
