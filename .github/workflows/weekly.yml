@@ -1,0 +1,40 @@
+name: Weekly Wastewater Export
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'   # Every Monday 06:00 UTC
+  workflow_dispatch:      # Allow manual "Run workflow" from the Actions tab
+
+permissions:
+  contents: write         # Needed to commit CSVs back to the repo
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run exporter
+        env:
+          WWS_EMAIL:      ${{ vars.WWS_EMAIL }}
+          WWS_SMTP_USER:  ${{ secrets.SMTP_USER }}
+          WWS_SMTP_PASS:  ${{ secrets.SMTP_PASS }}
+          WWS_EMAIL_TO:   ${{ secrets.EMAIL_TO }}
+        run: python wastewater_fetch.py
+
+      - name: Commit CSV back to repo (acts as cloud folder)
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add output/*.csv
+          git commit -m "chore: weekly wastewater export $(date -u +%F)" || echo "nothing to commit"
+          git push
