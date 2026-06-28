@@ -1,2 +1,2 @@
-requests>=2.31
-pandas>=2.0
+requests>=2.28.0
+pandas>=2.0.0
