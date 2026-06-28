@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-WastewaterScan Data Exporter - Diagnostic & Broad-Spectrum Version
+WastewaterScan Data Exporter - Dynamic Introspection Version
 """
 
 import os
@@ -43,27 +43,13 @@ session.headers.update({
 
 INTROSPECTION_QUERY = """{ __schema { queryType { fields { name } } } }"""
 
-# A wide net of possible root query names for this kind of data
-POSSIBLE_ROOTS = [
-    "measurements", "sites", "samplingEvents", "pathogens", "metrics",
-    "timeseries", "data", "results", "records", "samples", "sitesData",
-    "allMeasurements", "allSites", "getMeasurements", "measurement", "site"
-]
-
 # ── Embedded-data extraction ───────────────────────────────────────────
-def _looks_like_records(obj_list):
-    if not isinstance(obj_list, list) or len(obj_list) == 0: return False
-    if isinstance(obj_list[0], dict) and len(obj_list[0].keys()) >= 3: return True
-    return False
-
 def extract_records_from_json(payload):
     def _find(obj, depth=0):
         if depth > 10: return None
-        if isinstance(obj, list) and _looks_like_records(obj): return obj
-        if (isinstance(obj, list) and len(obj) > 0 and isinstance(obj[0], dict)
-                and obj[0].get("type") == "Feature" and "properties" in obj[0]):
-            props = [f.get("properties", {}) for f in obj if isinstance(f.get("properties"), dict)]
-            if props and _looks_like_records(props): return props
+        # Broad search: any list of dictionaries with at least 1 key
+        if isinstance(obj, list) and len(obj) > 0 and isinstance(obj[0], dict) and len(obj[0].keys()) >= 1:
+            return obj
         if isinstance(obj, dict):
             for v in obj.values():
                 r = _find(v, depth + 1)
@@ -74,7 +60,12 @@ def extract_records_from_json(payload):
 def _extract_next_data(html):
     m = re.search(r'<script\s+id="__NEXT_DATA__"[^>]*>(.*?)</script>', html, re.DOTALL)
     if m:
-        try: return json.loads(m.group(1))
+        try:
+            data = json.loads(m.group(1))
+            # Check common Next.js paths
+            if 'props' in data and 'pageProps' in data['props']:
+                return data['props']['pageProps']
+            return data
         except json.JSONDecodeError: pass
     return None
 
@@ -101,21 +92,64 @@ def discover_endpoints(base_url, html):
     rest = sorted(c for c in candidates if c not in gql)
     return gql + rest
 
+def try_query_field(url, name):
+    # Try shallow queries first to see if the field exists and is accessible
+    # Crucial: We try with NO arguments first, then common pagination args
+    shallow_queries = [
+        f"""query {{ {name} {{ id }} }}""",
+        f"""query {{ {name}(limit: 1) {{ id }} }}""",
+        f"""query {{ {name}(first: 1) {{ id }} }}""",
+    ]
+    
+    for sq in shallow_queries:
+        try:
+            r = session.post(url, json={"query": sq}, headers={"Content-Type": "application/json"}, timeout=15)
+            if r.status_code == 200:
+                body = r.json()
+                if body.get("data") and body["data"].get(name) is not None:
+                    log.info(f"    ✓✓✓ FOUND VALID ROOT: '{name}' (Query: {sq.strip()})")
+                    # Now that we know the root and its valid arguments, try to get deep data
+                    # We replace the { id } with deep fields, keeping the valid argument structure
+                    arg_match = re.search(r'\(.*\)', sq)
+                    args = arg_match.group(0) if arg_match else ""
+                    
+                    deep_queries = [
+                        f"""query {{ {name}{args} {{ sampleDate pathogen concentration location {{ name state }} }} }}""",
+                        f"""query {{ {name}{args} {{ edges {{ node {{ sampleDate pathogen concentration location {{ name state }} }} }} }} }}""",
+                        f"""query {{ {name}{args} {{ id name state region measurements {{ sampleDate pathogen }} }} }}""",
+                    ]
+                    for dq in deep_queries:
+                        try:
+                            r2 = session.post(url, json={"query": dq}, headers={"Content-Type": "application/json"}, timeout=15)
+                            if r2.status_code == 200:
+                                body2 = r2.json()
+                                if body2.get("data") and body2["data"].get(name) is not None:
+                                    if body2["data"][name]: # not empty
+                                        return body2
+                        except Exception: pass
+        except Exception: pass
+    return None
+
 def try_graphql(url):
     log.info(f"  Trying GraphQL: {url}")
-    
-    # 1. Try Introspection to see what the API actually offers
     try:
         r = session.post(url, json={"query": INTROSPECTION_QUERY}, headers={"Content-Type": "application/json"}, timeout=10)
         if r.status_code == 200:
             body = r.json()
             if body.get("data") and body["data"].get("__schema"):
-                fields = [f["name"] for f in body["data"]["__schema"]["queryType"]["fields"]]
-                log.info(f"    🔥 INTROSPECTION SUCCESS! Available Queries: {fields}")
-                # Automatically prioritize schema-specific ones first!
+                schema_data = body["data"]["__schema"]
+                fields = schema_data.get("queryType", {}).get("fields", [])
+                field_names = [f["name"] for f in fields]
+                log.info(f"    🔥 INTROSPECTION SUCCESS! Available Queries: {field_names}")
+                
+                # Dynamically try each field!
                 for field in fields:
-                    if field not in POSSIBLE_ROOTS:
-                        POSSIBLE_ROOTS.insert(0, field)
+                    name = field["name"]
+                    if name.startswith("__"): continue
+                    result = try_query_field(url, name)
+                    if result:
+                        return result
+                        
             elif body.get("errors"):
                 log.info(f"    Introspection disabled: {body['errors'][0].get('message')}")
         elif r.status_code == 403:
@@ -126,37 +160,6 @@ def try_graphql(url):
         return None
     except Exception as e:
         log.info(f"    Introspection exception: {e}")
-
-    # 2. Try a broad net of roots
-    for root in POSSIBLE_ROOTS:
-        query = f"""query {{ {root}(limit: 10) {{ id }} }}"""
-        try:
-            r = session.post(url, json={"query": query}, headers={"Content-Type": "application/json"}, timeout=15)
-            if r.status_code == 200:
-                body = r.json()
-                if body.get("data") and body["data"].get(root) is not None:
-                    log.info(f"    ✓✓✓ FOUND VALID ROOT: '{root}' ✓✓✓")
-                    # Now try to get real data from this root
-                    deep_queries = [
-                        f"""query {{ {root}(limit: 100, orderBy: {{sampleDate: DESC}}) {{ sampleDate pathogen concentration location {{ name state }} }} }}""",
-                        f"""query {{ {root}(limit: 100, order_by: {{sample_date: desc}}) {{ sample_date pathogen concentration location {{ name state }} }} }}""",
-                        f"""query {{ {root}(limit: 100) {{ sampleDate pathogen concentration location {{ name state }} }} }}""",
-                        f"""query {{ {root}(limit: 100) {{ id name state }} }}""", # Fallback for site-based roots
-                    ]
-                    for dq in deep_queries:
-                        r2 = session.post(url, json={"query": dq}, headers={"Content-Type": "application/json"}, timeout=15)
-                        if r2.status_code == 200 and r2.json().get("data"):
-                            return r2.json()
-                    
-                    # If deep queries fail, return the basic one so we don't hard-crash
-                    return body
-                elif body.get("errors"):
-                    err_msg = body["errors"][0].get("message", "")
-                    # Log hints! This is crucial for debugging.
-                    if "Did you mean" in err_msg or "Cannot query field" not in err_msg:
-                        log.info(f"    💡 API Hint for '{root}': {err_msg}")
-        except Exception:
-            continue
     return None
 
 def try_rest(url):
@@ -225,8 +228,8 @@ def fetch_data():
         if data: return data
 
     raise RuntimeError(
-        "No endpoint returned data. Check the logs above for '🔥 INTROSPECTION SUCCESS' or '💡 API Hint' "
-        "to see what the actual schema names are, and add them to the script."
+        "No endpoint returned data. Check the logs above for '🔥 INTROSPECTION SUCCESS' "
+        "and ensure the script is trying the correct arguments."
     )
 
 # ── Processing ─────────────────────────────────────────────────────────
@@ -236,13 +239,17 @@ def extract_records(payload):
     if isinstance(payload, list): return payload
         
     data = payload.get('data', payload) if isinstance(payload, dict) else payload
-    for key in POSSIBLE_ROOTS + ['results', 'data', 'items', 'records']:
+    # Look for common keys, but also fall back to finding ANY list of dicts
+    for key in ['measurements', 'results', 'data', 'items', 'records', 'sites', 'samples', 'samplingEvents', 'pathogens', 'metrics', 'timeseries', 'sitesData', 'allMeasurements', 'allSites', 'getMeasurements', 'measurement', 'site']:
         if isinstance(data, dict) and key in data and isinstance(data[key], list):
             recs = data[key]
             if recs and isinstance(recs[0], dict) and 'node' in recs[0]:
                 recs = [e['node'] for e in recs]
             return recs
-    return data
+            
+    # Fallback: find any list of dicts
+    found = extract_records_from_json(data)
+    return found if found else data
 
 def pick_third_latest(records):
     if len(records) < 3:
