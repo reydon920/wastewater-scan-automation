@@ -483,9 +483,11 @@ def fetch_data():
                 if best_data is None: best_data = data
                 log.info("  ✗ Data found, but missing measurement fields. Continuing search...")
 
-    if best_data:
-        log.warning("⚠️ Could not find a measurements endpoint. Returning sites/locations data instead.")
+    # Replace the end of fetch_data() with this:
+    if best_data and is_measurement_data(best_data):
         return best_data
+        
+    raise RuntimeError("Critical Failure: No valid measurement data found. The API schema may have changed. Aborting to prevent empty CSV generation.")
         
     raise RuntimeError("No endpoint returned data.")
 
