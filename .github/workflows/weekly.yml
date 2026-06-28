@@ -23,9 +23,8 @@ jobs:
 
       - name: Run exporter
         env:
-          # Optional: set once you find the real endpoint from the first
-          # run's logs, then hard-code it here for reliability.
-          WWS_API_URL:   ''
+          # Leave blank to let the script auto-discover the API endpoint.
+          WWS_API_URL:    ''
           WWS_EMAIL:      ${{ vars.WWS_EMAIL }}
           WWS_SMTP_USER:  ${{ secrets.SMTP_USER }}
           WWS_SMTP_PASS:  ${{ secrets.SMTP_PASS }}
