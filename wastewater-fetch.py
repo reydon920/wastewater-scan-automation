@@ -1,15 +1,6 @@
 #!/usr/bin/env python3
 """
-WastewaterScan Data Exporter
-=============================
-Fetches infectious-disease measurements from data.wastewaterscan.org.
-Strategy:
-  1. Configured WWS_API_URL override
-  2. __NEXT_DATA__ embedded in the page HTML
-  3. Inline <script> JSON
-  4. Discover API endpoints from JS bundles → introspect → multi-query
-  5. Same-domain REST/GraphQL fallback paths
-Picks the third-to-latest record, writes CSV, optionally emails.
+WastewaterScan Data Exporter - Diagnostic & Broad-Spectrum Version
 """
 
 import os
@@ -29,9 +20,7 @@ import pandas as pd
 BASE_URL      = os.getenv("WWS_BASE_URL", "https://data.wastewaterscan.org")
 KNOWN_API_URL = os.getenv("WWS_API_URL", "")
 OUT_DIR       = os.getenv("WWS_OUT_DIR", "output")
-CSV_PATH      = os.path.join(
-    OUT_DIR, f"wastewater_{datetime.now(timezone.utc):%Y%m%d}.csv"
-)
+CSV_PATH      = os.path.join(OUT_DIR, f"wastewater_{datetime.now(timezone.utc):%Y%m%d}.csv")
 
 EMAIL_ENABLED = os.getenv("WWS_EMAIL", "0") == "1"
 SMTP_HOST = os.getenv("WWS_SMTP_HOST", "smtp.gmail.com")
@@ -45,138 +34,130 @@ log = logging.getLogger("wws")
 
 session = requests.Session()
 session.headers.update({
-    "User-Agent": (
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/124.0.0.0 Safari/537.36"
-    ),
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
     "Accept": "*/*",
     "Accept-Language": "en-US,en;q=0.9",
     "Origin": "https://data.wastewaterscan.org",
     "Referer": "https://data.wastewaterscan.org/",
 })
 
-# ── Introspection & Queries ────────────────────────────────────────────
 INTROSPECTION_QUERY = """{ __schema { queryType { fields { name } } } }"""
 
-GRAPHQL_QUERIES = [
-    """query { measurements(limit: 100, orderBy: { sampleDate: DESC }) { sampleDate pathogen concentration concentrationUnits pctDetect rollingAverage location { id name region state } } }""",
-    """query { measurements(limit: 100, order_by: {sample_date: desc}) { sample_date pathogen concentration concentration_units pct_detect rolling_average location { id name region state } } }""",
-    """query { measurements(first: 100) { edges { node { sampleDate pathogen concentration pctDetect location { id name region state } } } } }""",
-    """query { sites { id name state region measurements(limit: 10, orderBy: { sampleDate: DESC }) { sampleDate pathogen concentration pctDetect } } }""",
-    """query { measurements(limit: 100) { sampleDate pathogen concentration location { id name region state } } }""",
+# A wide net of possible root query names for this kind of data
+POSSIBLE_ROOTS = [
+    "measurements", "sites", "samplingEvents", "pathogens", "metrics",
+    "timeseries", "data", "results", "records", "samples", "sitesData",
+    "allMeasurements", "allSites", "getMeasurements", "measurement", "site"
 ]
 
 # ── Embedded-data extraction ───────────────────────────────────────────
 def _looks_like_records(obj_list):
-    """Broad check: does this list contain dictionary objects (potential records)?"""
-    if not isinstance(obj_list, list) or len(obj_list) == 0:
-        return False
-    # A list of dicts with at least 3 keys is likely a data record structure
-    if isinstance(obj_list[0], dict) and len(obj_list[0].keys()) >= 3:
-        return True
+    if not isinstance(obj_list, list) or len(obj_list) == 0: return False
+    if isinstance(obj_list[0], dict) and len(obj_list[0].keys()) >= 3: return True
     return False
 
 def extract_records_from_json(payload):
-    """Recursively search a JSON object for measurement-record lists."""
     def _find(obj, depth=0):
-        if depth > 10:
-            return None
-        if isinstance(obj, list) and _looks_like_records(obj):
-            return obj
-        # GeoJSON features → flatten properties
-        if (isinstance(obj, list) and len(obj) > 0
-                and isinstance(obj[0], dict)
-                and obj[0].get("type") == "Feature"
-                and "properties" in obj[0]):
+        if depth > 10: return None
+        if isinstance(obj, list) and _looks_like_records(obj): return obj
+        if (isinstance(obj, list) and len(obj) > 0 and isinstance(obj[0], dict)
+                and obj[0].get("type") == "Feature" and "properties" in obj[0]):
             props = [f.get("properties", {}) for f in obj if isinstance(f.get("properties"), dict)]
-            if props and _looks_like_records(props):
-                return props
+            if props and _looks_like_records(props): return props
         if isinstance(obj, dict):
             for v in obj.values():
                 r = _find(v, depth + 1)
-                if r is not None:
-                    return r
+                if r is not None: return r
         return None
     return _find(payload)
 
-
-# ── __NEXT_DATA__ ──────────────────────────────────────────────────────
 def _extract_next_data(html):
     m = re.search(r'<script\s+id="__NEXT_DATA__"[^>]*>(.*?)</script>', html, re.DOTALL)
     if m:
-        try:
-            return json.loads(m.group(1))
-        except json.JSONDecodeError:
-            pass
+        try: return json.loads(m.group(1))
+        except json.JSONDecodeError: pass
     return None
 
-
-# ── URL harvesting from JS / HTML ──────────────────────────────────────
 def _harvest_urls(text, base, out):
     out.update(re.findall(r'["\'`](https?://[^"\'`]*graphql[^"\'`]*)["\'`]', text, re.I))
     out.update(re.findall(r'["\'`](https?://[^"\'`]*/api/[^"\'`]*)["\'`]', text, re.I))
-    for p in re.findall(r'["\'`](/(?:api|graphql)/[^"\'`]*)["\'`]', text):
-        out.add(urljoin(base, p))
-    for p in re.findall(r'fetch\s*\(\s*["\'`]([^"\'`]+)["\'`]', text):
-        out.add(p if p.startswith("http") else urljoin(base, p))
-    out.update(re.findall(r'uri\s*:\s*["\'`](https?://[^"\'`]+)["\'`]', text))
+    for p in re.findall(r'["\'`](/(?:api|graphql)/[^"\'`]*)["\'`]', text): out.add(urljoin(base, p))
+    for p in re.findall(r'fetch\s*\(\s*["\'`]([^"\'`]+)["\'`]', text): out.add(p if p.startswith("http") else urljoin(base, p))
 
-
-# ── Endpoint discovery ─────────────────────────────────────────────────
 def discover_endpoints(base_url, html):
     candidates = set()
     _harvest_urls(html, base_url, candidates)
-
     ext_scripts = re.findall(r'<script[^>]+src="([^"]+)"', html)
     for src in ext_scripts[:15]:
-        if not src.endswith('.js'):
-            continue
+        if not src.endswith('.js'): continue
         url = urljoin(base_url, src)
-        log.info(f"  Inspecting JS bundle: {url}")
         try:
             r = session.get(url, timeout=15)
-            if r.status_code == 200:
-                _harvest_urls(r.text, base_url, candidates)
-        except requests.exceptions.RequestException:
-            pass
-
-    # Strict same-domain educated guesses ONLY
+            if r.status_code == 200: _harvest_urls(r.text, base_url, candidates)
+        except requests.exceptions.RequestException: pass
     for path in ['/graphql', '/api/graphql', '/v1/graphql', '/api/data', '/api/measurements', '/data.json']:
         candidates.add(urljoin(base_url, path))
-
     gql = sorted(c for c in candidates if 'graphql' in c.lower())
     rest = sorted(c for c in candidates if c not in gql)
     return gql + rest
 
-
 def try_graphql(url):
     log.info(f"  Trying GraphQL: {url}")
+    
+    # 1. Try Introspection to see what the API actually offers
     try:
         r = session.post(url, json={"query": INTROSPECTION_QUERY}, headers={"Content-Type": "application/json"}, timeout=10)
-        if r.status_code == 403:
-            log.info("    ✗ 403 Forbidden (API is blocking automated requests)")
+        if r.status_code == 200:
+            body = r.json()
+            if body.get("data") and body["data"].get("__schema"):
+                fields = [f["name"] for f in body["data"]["__schema"]["queryType"]["fields"]]
+                log.info(f"    🔥 INTROSPECTION SUCCESS! Available Queries: {fields}")
+                # Automatically prioritize schema-specific ones first!
+                for field in fields:
+                    if field not in POSSIBLE_ROOTS:
+                        POSSIBLE_ROOTS.insert(0, field)
+            elif body.get("errors"):
+                log.info(f"    Introspection disabled: {body['errors'][0].get('message')}")
+        elif r.status_code == 403:
+            log.info("    ✗ 403 Forbidden")
             return None
-        if r.status_code == 200 and "data" in r.json():
-            log.info("    ✓ Introspection successful")
     except requests.exceptions.ConnectionError:
-        log.info("    ✗ DNS/Connection failed (skipping)")
+        log.info("    ✗ DNS/Connection failed")
         return None
-    except Exception:
-        pass
+    except Exception as e:
+        log.info(f"    Introspection exception: {e}")
 
-    for i, query in enumerate(GRAPHQL_QUERIES):
+    # 2. Try a broad net of roots
+    for root in POSSIBLE_ROOTS:
+        query = f"""query {{ {root}(limit: 10) {{ id }} }}"""
         try:
             r = session.post(url, json={"query": query}, headers={"Content-Type": "application/json"}, timeout=15)
             if r.status_code == 200:
                 body = r.json()
-                if body.get("data"):
-                    log.info(f"    ✓ Query {i+1} succeeded!")
+                if body.get("data") and body["data"].get(root) is not None:
+                    log.info(f"    ✓✓✓ FOUND VALID ROOT: '{root}' ✓✓✓")
+                    # Now try to get real data from this root
+                    deep_queries = [
+                        f"""query {{ {root}(limit: 100, orderBy: {{sampleDate: DESC}}) {{ sampleDate pathogen concentration location {{ name state }} }} }}""",
+                        f"""query {{ {root}(limit: 100, order_by: {{sample_date: desc}}) {{ sample_date pathogen concentration location {{ name state }} }} }}""",
+                        f"""query {{ {root}(limit: 100) {{ sampleDate pathogen concentration location {{ name state }} }} }}""",
+                        f"""query {{ {root}(limit: 100) {{ id name state }} }}""", # Fallback for site-based roots
+                    ]
+                    for dq in deep_queries:
+                        r2 = session.post(url, json={"query": dq}, headers={"Content-Type": "application/json"}, timeout=15)
+                        if r2.status_code == 200 and r2.json().get("data"):
+                            return r2.json()
+                    
+                    # If deep queries fail, return the basic one so we don't hard-crash
                     return body
+                elif body.get("errors"):
+                    err_msg = body["errors"][0].get("message", "")
+                    # Log hints! This is crucial for debugging.
+                    if "Did you mean" in err_msg or "Cannot query field" not in err_msg:
+                        log.info(f"    💡 API Hint for '{root}': {err_msg}")
         except Exception:
             continue
     return None
-
 
 def try_rest(url):
     log.info(f"  Trying REST: {url}")
@@ -193,11 +174,9 @@ def try_rest(url):
                 log.info("    ✓ REST CSV hit!")
                 return {"_csv": r.text}
     except requests.exceptions.ConnectionError:
-        log.info("    ✗ DNS/Connection failed (skipping)")
-    except Exception:
-        pass
+        log.info("    ✗ DNS/Connection failed")
+    except Exception: pass
     return None
-
 
 # ── Main Fetch Logic ───────────────────────────────────────────────────
 def fetch_data():
@@ -217,7 +196,6 @@ def fetch_data():
         log.error(f"Failed to fetch main page: {e}")
         base, html = BASE_URL, ""
 
-    # 1. __NEXT_DATA__
     next_data = _extract_next_data(html)
     if next_data:
         records = extract_records_from_json(next_data)
@@ -225,48 +203,40 @@ def fetch_data():
             log.info(f"✓ Extracted {len(records)} records from __NEXT_DATA__")
             return records
 
-    # 2. Generic script JSON
     scripts = re.findall(r'<script[^>]*>(.*?)</script>', html, re.DOTALL)
     for script_text in scripts:
-        if not script_text.strip().startswith('{') and not script_text.strip().startswith('['):
-            continue
+        if not script_text.strip().startswith('{') and not script_text.strip().startswith('['): continue
         try:
             payload = json.loads(script_text)
             records = extract_records_from_json(payload)
             if records:
                 log.info(f"✓ Extracted {len(records)} records from embedded HTML JSON")
                 return records
-        except json.JSONDecodeError:
-            pass
+        except json.JSONDecodeError: pass
 
-    # 3. Discover & probe endpoints
     log.info("  No embedded data found. Discovering API endpoints...")
     endpoints = discover_endpoints(base, html)
 
     log.info(f"  {len(endpoints)} candidate endpoint(s) to try:")
-    for url in endpoints:
-        log.info(f"    • {url}")
+    for url in endpoints: log.info(f"    • {url}")
 
     for url in endpoints:
         data = try_graphql(url) if 'graphql' in url.lower() else try_rest(url)
         if data: return data
 
     raise RuntimeError(
-        "No endpoint returned data. Open data.wastewaterscan.org in your browser, "
-        "open DevTools (F12) → Network tab → filter 'graphql' or 'api', find the real "
-        "endpoint URL, then set it as the WWS_API_URL environment variable in GitHub Actions."
+        "No endpoint returned data. Check the logs above for '🔥 INTROSPECTION SUCCESS' or '💡 API Hint' "
+        "to see what the actual schema names are, and add them to the script."
     )
-
 
 # ── Processing ─────────────────────────────────────────────────────────
 def extract_records(payload):
     if isinstance(payload, dict) and '_csv' in payload:
         return pd.read_csv(StringIO(payload['_csv'])).to_dict('records')
-    if isinstance(payload, list):
-        return payload
+    if isinstance(payload, list): return payload
         
     data = payload.get('data', payload) if isinstance(payload, dict) else payload
-    for key in ('measurements', 'results', 'data', 'items', 'records', 'sites'):
+    for key in POSSIBLE_ROOTS + ['results', 'data', 'items', 'records']:
         if isinstance(data, dict) and key in data and isinstance(data[key], list):
             recs = data[key]
             if recs and isinstance(recs[0], dict) and 'node' in recs[0]:
@@ -274,21 +244,19 @@ def extract_records(payload):
             return recs
     return data
 
-
 def pick_third_latest(records):
     if len(records) < 3:
-        raise ValueError(f"Need ≥3 records, got {len(records)}")
+        log.warning(f"Only got {len(records)} records, returning the latest one instead of third-to-latest.")
+        return records[0] if records else {}
 
     def sort_key(r):
         for k in ('sampleDate', 'sample_date', 'date', 'timestamp', 'createdAt'):
-            if r.get(k):
-                return str(r[k])
+            if r.get(k): return str(r[k])
         return ''
 
     rec = sorted(records, key=sort_key, reverse=True)[2]
     log.info(f"  Third-to-latest date found: {rec.get('sampleDate') or rec.get('date', '?')}")
     return rec
-
 
 def to_df(record):
     loc = record.get('location') or record.get('site') or record.get('properties') or {}
@@ -309,13 +277,10 @@ def to_df(record):
     df['sample_date'] = pd.to_datetime(df['sample_date'], errors='coerce')
     return df
 
-
-# ── Output ─────────────────────────────────────────────────────────────
 def save_csv(df, path):
     os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
     df.to_csv(path, index=False)
     log.info(f"✓ Saved {path}")
-
 
 def maybe_email(path):
     if not EMAIL_ENABLED: return
@@ -330,8 +295,6 @@ def maybe_email(path):
         s.send_message(msg)
     log.info(f"✓ Emailed to {EMAIL_TO}")
 
-
-# ── Main ───────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     payload = fetch_data()
     records = extract_records(payload)
