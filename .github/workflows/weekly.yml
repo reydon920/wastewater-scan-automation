@@ -23,13 +23,14 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run exporter
+      - - name: Run exporter
+        working-directory: ${{ github.workspace }}
         env:
           WWS_EMAIL:      ${{ vars.WWS_EMAIL }}
           WWS_SMTP_USER:  ${{ secrets.SMTP_USER }}
           WWS_SMTP_PASS:  ${{ secrets.SMTP_PASS }}
           WWS_EMAIL_TO:   ${{ secrets.EMAIL_TO }}
-        run: python wastewater-scan-automation/wastewater_fetch.py
+        run: python wastewater_fetch.py
 
       - name: Commit CSV back to repo (acts as cloud folder)
         run: |
