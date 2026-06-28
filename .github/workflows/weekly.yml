@@ -23,7 +23,7 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - - name: Run exporter
+      - name: Run exporter
         working-directory: ${{ github.workspace }}
         env:
           WWS_EMAIL:      ${{ vars.WWS_EMAIL }}
