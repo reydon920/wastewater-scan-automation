@@ -30,7 +30,7 @@ jobs:
           WWS_SMTP_USER:  ${{ secrets.SMTP_USER }}
           WWS_SMTP_PASS:  ${{ secrets.SMTP_PASS }}
           WWS_EMAIL_TO:   ${{ secrets.EMAIL_TO }}
-        run: python wastewater_fetch.py
+        run: python wastewater-fetch.py
 
       - name: Commit CSV
         run: |
