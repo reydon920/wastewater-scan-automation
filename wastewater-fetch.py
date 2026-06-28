@@ -201,51 +201,51 @@ def try_graphql(url):
                     if not site_fields: site_fields = "id siteId name state region"
                     
                     # FALLBACK: Hardcoded queries when introspection is disabled
-                queries = [
-                    # Modern Verily/WWS schema often requires 'samples' instead of 'measurements'
-                    """
-                    query {
-                      samples(first: 50000) {
-                        sample_date: date
-                        pathogen: target
-                        concentration: value
-                        pct_detectable: pctDetect
-                        location_id: siteId
-                        site { name state region }
-                      }
-                    }
-                    """,
-                    # Standard measurement query without the strict 'limit' argument
-                    """
-                    query {
-                      measurements {
-                        date
-                        pathogen
-                        concentration
-                        concentrationUnits
-                        pctDetectable
-                        rollingAverage
-                        siteId
-                        site { id name state region }
-                      }
-                    }
-                    """,
-                    # Your original fallback, kept as a last resort
-                    """
-                    query {
-                      measurements(limit: 100000) {
-                        sample_date
-                        pathogen
-                        concentration
-                        concentration_units
-                        pct_detectable
-                        rolling_average
-                        site_id
-                        site { id name state region }
-                      }
-                    }
-                    """
-                ]
+                    queries = [
+                        # Modern Verily/WWS schema often requires 'samples' instead of 'measurements'
+                        """
+                        query {
+                          samples(first: 50000) {
+                            sample_date: date
+                            pathogen: target
+                            concentration: value
+                            pct_detectable: pctDetect
+                            location_id: siteId
+                            site { name state region }
+                          }
+                        }
+                        """,
+                        # Standard measurement query without the strict 'limit' argument
+                        """
+                        query {
+                          measurements {
+                            date
+                            pathogen
+                            concentration
+                            concentrationUnits
+                            pctDetectable
+                            rollingAverage
+                            siteId
+                            site { id name state region }
+                          }
+                        }
+                        """,
+                        # Your original fallback, kept as a last resort
+                        """
+                        query {
+                          measurements(limit: 100000) {
+                            sample_date
+                            pathogen
+                            concentration
+                            concentration_units
+                            pct_detectable
+                            rolling_average
+                            site_id
+                            site { id name state region }
+                          }
+                        }
+                        """
+                    ]
                     for q in queries:
                         r_sites = session.post(url, json={"query": q}, timeout=30)
                         if r_sites.status_code == 200:
