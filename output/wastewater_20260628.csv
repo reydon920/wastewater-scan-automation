@@ -1,52 +1,52 @@
 sample_date,pathogen,concentration,concentration_units,pct_detectable,rolling_average,location_id,location_name,region,state,fetched_at_utc,type,geometry_type
-,,,,,,,Washington,West,,2026-06-28T10:12:32.368458+00:00,Feature,MultiPolygon
-,,,,,,,Idaho,West,,2026-06-28T10:12:32.368491+00:00,Feature,MultiPolygon
-,,,,,,,Montana,West,,2026-06-28T10:12:32.368506+00:00,Feature,MultiPolygon
-,,,,,,,North Dakota,Midwest,,2026-06-28T10:12:32.368513+00:00,Feature,MultiPolygon
-,,,,,,,Minnesota,Midwest,,2026-06-28T10:12:32.368524+00:00,Feature,MultiPolygon
-,,,,,,,Michigan,Midwest,,2026-06-28T10:12:32.368532+00:00,Feature,MultiPolygon
-,,,,,,,Ohio,Midwest,,2026-06-28T10:12:32.368539+00:00,Feature,MultiPolygon
-,,,,,,,Pennsylvania,Northeast,,2026-06-28T10:12:32.368547+00:00,Feature,MultiPolygon
-,,,,,,,New York,Northeast,,2026-06-28T10:12:32.368552+00:00,Feature,MultiPolygon
-,,,,,,,Vermont,Northeast,,2026-06-28T10:12:32.368557+00:00,Feature,MultiPolygon
-,,,,,,,New Hampshire,Northeast,,2026-06-28T10:12:32.368562+00:00,Feature,MultiPolygon
-,,,,,,,Maine,Northeast,,2026-06-28T10:12:32.368566+00:00,Feature,MultiPolygon
-,,,,,,,Arizona,West,,2026-06-28T10:12:32.368571+00:00,Feature,MultiPolygon
-,,,,,,,California,West,,2026-06-28T10:12:32.368575+00:00,Feature,MultiPolygon
-,,,,,,,New Mexico,West,,2026-06-28T10:12:32.368579+00:00,Feature,MultiPolygon
-,,,,,,,Texas,South,,2026-06-28T10:12:32.368583+00:00,Feature,MultiPolygon
-,,,,,,,Alaska,West,,2026-06-28T10:12:32.368588+00:00,Feature,MultiPolygon
-,,,,,,,Louisiana,South,,2026-06-28T10:12:32.368592+00:00,Feature,MultiPolygon
-,,,,,,,Mississippi,South,,2026-06-28T10:12:32.368596+00:00,Feature,MultiPolygon
-,,,,,,,Alabama,South,,2026-06-28T10:12:32.368600+00:00,Feature,MultiPolygon
-,,,,,,,Florida,South,,2026-06-28T10:12:32.368604+00:00,Feature,MultiPolygon
-,,,,,,,Georgia,South,,2026-06-28T10:12:32.368608+00:00,Feature,MultiPolygon
-,,,,,,,South Carolina,South,,2026-06-28T10:12:32.368612+00:00,Feature,MultiPolygon
-,,,,,,,North Carolina,South,,2026-06-28T10:12:32.368616+00:00,Feature,MultiPolygon
-,,,,,,,Virginia,South,,2026-06-28T10:12:32.368620+00:00,Feature,MultiPolygon
-,,,,,,,District of Columbia,South,,2026-06-28T10:12:32.368624+00:00,Feature,MultiPolygon
-,,,,,,,Maryland,South,,2026-06-28T10:12:32.368634+00:00,Feature,MultiPolygon
-,,,,,,,Delaware,South,,2026-06-28T10:12:32.368637+00:00,Feature,MultiPolygon
-,,,,,,,New Jersey,Northeast,,2026-06-28T10:12:32.368641+00:00,Feature,MultiPolygon
-,,,,,,,Connecticut,Northeast,,2026-06-28T10:12:32.368645+00:00,Feature,MultiPolygon
-,,,,,,,Rhode Island,Northeast,,2026-06-28T10:12:32.368649+00:00,Feature,MultiPolygon
-,,,,,,,Massachusetts,Northeast,,2026-06-28T10:12:32.368653+00:00,Feature,MultiPolygon
-,,,,,,,Oregon,West,,2026-06-28T10:12:32.368657+00:00,Feature,MultiPolygon
-,,,,,,,Hawaii,West,,2026-06-28T10:12:32.368662+00:00,Feature,MultiPolygon
-,,,,,,,Utah,West,,2026-06-28T10:12:32.368670+00:00,Feature,MultiPolygon
-,,,,,,,Wyoming,West,,2026-06-28T10:12:32.368677+00:00,Feature,MultiPolygon
-,,,,,,,Nevada,West,,2026-06-28T10:12:32.368686+00:00,Feature,MultiPolygon
-,,,,,,,Colorado,West,,2026-06-28T10:12:32.368692+00:00,Feature,MultiPolygon
-,,,,,,,South Dakota,Midwest,,2026-06-28T10:12:32.368698+00:00,Feature,MultiPolygon
-,,,,,,,Nebraska,Midwest,,2026-06-28T10:12:32.368703+00:00,Feature,MultiPolygon
-,,,,,,,Kansas,Midwest,,2026-06-28T10:12:32.368709+00:00,Feature,MultiPolygon
-,,,,,,,Oklahoma,South,,2026-06-28T10:12:32.368715+00:00,Feature,MultiPolygon
-,,,,,,,Iowa,Midwest,,2026-06-28T10:12:32.368721+00:00,Feature,MultiPolygon
-,,,,,,,Missouri,Midwest,,2026-06-28T10:12:32.368726+00:00,Feature,MultiPolygon
-,,,,,,,Wisconsin,Midwest,,2026-06-28T10:12:32.368732+00:00,Feature,MultiPolygon
-,,,,,,,Illinois,Midwest,,2026-06-28T10:12:32.368738+00:00,Feature,MultiPolygon
-,,,,,,,Kentucky,South,,2026-06-28T10:12:32.368746+00:00,Feature,MultiPolygon
-,,,,,,,Arkansas,South,,2026-06-28T10:12:32.368752+00:00,Feature,MultiPolygon
-,,,,,,,Tennessee,South,,2026-06-28T10:12:32.368757+00:00,Feature,MultiPolygon
-,,,,,,,West Virginia,South,,2026-06-28T10:12:32.368763+00:00,Feature,MultiPolygon
-,,,,,,,Indiana,Midwest,,2026-06-28T10:12:32.368768+00:00,Feature,MultiPolygon
+,,,,,,,Washington,West,,2026-06-28T10:38:28.067875+00:00,Feature,MultiPolygon
+,,,,,,,Idaho,West,,2026-06-28T10:38:28.067908+00:00,Feature,MultiPolygon
+,,,,,,,Montana,West,,2026-06-28T10:38:28.067931+00:00,Feature,MultiPolygon
+,,,,,,,North Dakota,Midwest,,2026-06-28T10:38:28.067945+00:00,Feature,MultiPolygon
+,,,,,,,Minnesota,Midwest,,2026-06-28T10:38:28.067957+00:00,Feature,MultiPolygon
+,,,,,,,Michigan,Midwest,,2026-06-28T10:38:28.067967+00:00,Feature,MultiPolygon
+,,,,,,,Ohio,Midwest,,2026-06-28T10:38:28.067977+00:00,Feature,MultiPolygon
+,,,,,,,Pennsylvania,Northeast,,2026-06-28T10:38:28.067986+00:00,Feature,MultiPolygon
+,,,,,,,New York,Northeast,,2026-06-28T10:38:28.067996+00:00,Feature,MultiPolygon
+,,,,,,,Vermont,Northeast,,2026-06-28T10:38:28.068008+00:00,Feature,MultiPolygon
+,,,,,,,New Hampshire,Northeast,,2026-06-28T10:38:28.068022+00:00,Feature,MultiPolygon
+,,,,,,,Maine,Northeast,,2026-06-28T10:38:28.068031+00:00,Feature,MultiPolygon
+,,,,,,,Arizona,West,,2026-06-28T10:38:28.068044+00:00,Feature,MultiPolygon
+,,,,,,,California,West,,2026-06-28T10:38:28.068056+00:00,Feature,MultiPolygon
+,,,,,,,New Mexico,West,,2026-06-28T10:38:28.068068+00:00,Feature,MultiPolygon
+,,,,,,,Texas,South,,2026-06-28T10:38:28.068079+00:00,Feature,MultiPolygon
+,,,,,,,Alaska,West,,2026-06-28T10:38:28.068089+00:00,Feature,MultiPolygon
+,,,,,,,Louisiana,South,,2026-06-28T10:38:28.068106+00:00,Feature,MultiPolygon
+,,,,,,,Mississippi,South,,2026-06-28T10:38:28.068118+00:00,Feature,MultiPolygon
+,,,,,,,Alabama,South,,2026-06-28T10:38:28.068130+00:00,Feature,MultiPolygon
+,,,,,,,Florida,South,,2026-06-28T10:38:28.068142+00:00,Feature,MultiPolygon
+,,,,,,,Georgia,South,,2026-06-28T10:38:28.068154+00:00,Feature,MultiPolygon
+,,,,,,,South Carolina,South,,2026-06-28T10:38:28.068166+00:00,Feature,MultiPolygon
+,,,,,,,North Carolina,South,,2026-06-28T10:38:28.068177+00:00,Feature,MultiPolygon
+,,,,,,,Virginia,South,,2026-06-28T10:38:28.068189+00:00,Feature,MultiPolygon
+,,,,,,,District of Columbia,South,,2026-06-28T10:38:28.068202+00:00,Feature,MultiPolygon
+,,,,,,,Maryland,South,,2026-06-28T10:38:28.068216+00:00,Feature,MultiPolygon
+,,,,,,,Delaware,South,,2026-06-28T10:38:28.068230+00:00,Feature,MultiPolygon
+,,,,,,,New Jersey,Northeast,,2026-06-28T10:38:28.068239+00:00,Feature,MultiPolygon
+,,,,,,,Connecticut,Northeast,,2026-06-28T10:38:28.068250+00:00,Feature,MultiPolygon
+,,,,,,,Rhode Island,Northeast,,2026-06-28T10:38:28.068259+00:00,Feature,MultiPolygon
+,,,,,,,Massachusetts,Northeast,,2026-06-28T10:38:28.068269+00:00,Feature,MultiPolygon
+,,,,,,,Oregon,West,,2026-06-28T10:38:28.068278+00:00,Feature,MultiPolygon
+,,,,,,,Hawaii,West,,2026-06-28T10:38:28.068288+00:00,Feature,MultiPolygon
+,,,,,,,Utah,West,,2026-06-28T10:38:28.068297+00:00,Feature,MultiPolygon
+,,,,,,,Wyoming,West,,2026-06-28T10:38:28.068340+00:00,Feature,MultiPolygon
+,,,,,,,Nevada,West,,2026-06-28T10:38:28.068351+00:00,Feature,MultiPolygon
+,,,,,,,Colorado,West,,2026-06-28T10:38:28.068363+00:00,Feature,MultiPolygon
+,,,,,,,South Dakota,Midwest,,2026-06-28T10:38:28.068371+00:00,Feature,MultiPolygon
+,,,,,,,Nebraska,Midwest,,2026-06-28T10:38:28.068378+00:00,Feature,MultiPolygon
+,,,,,,,Kansas,Midwest,,2026-06-28T10:38:28.068387+00:00,Feature,MultiPolygon
+,,,,,,,Oklahoma,South,,2026-06-28T10:38:28.068396+00:00,Feature,MultiPolygon
+,,,,,,,Iowa,Midwest,,2026-06-28T10:38:28.068405+00:00,Feature,MultiPolygon
+,,,,,,,Missouri,Midwest,,2026-06-28T10:38:28.068410+00:00,Feature,MultiPolygon
+,,,,,,,Wisconsin,Midwest,,2026-06-28T10:38:28.068415+00:00,Feature,MultiPolygon
+,,,,,,,Illinois,Midwest,,2026-06-28T10:38:28.068419+00:00,Feature,MultiPolygon
+,,,,,,,Kentucky,South,,2026-06-28T10:38:28.068424+00:00,Feature,MultiPolygon
+,,,,,,,Arkansas,South,,2026-06-28T10:38:28.068439+00:00,Feature,MultiPolygon
+,,,,,,,Tennessee,South,,2026-06-28T10:38:28.068444+00:00,Feature,MultiPolygon
+,,,,,,,West Virginia,South,,2026-06-28T10:38:28.068449+00:00,Feature,MultiPolygon
+,,,,,,,Indiana,Midwest,,2026-06-28T10:38:28.068453+00:00,Feature,MultiPolygon
